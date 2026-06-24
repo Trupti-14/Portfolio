@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#11100e">
+  <title>Portfolio Admin | Trupti Patil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="admin.css?v=2">
+</head>
+<body>
+  <main class="admin-root">
+    <section class="login-shell" id="login-view">
+      <div class="login-panel">
+        <p class="admin-kicker">private.workspace</p>
+        <h1>Portfolio administration</h1>
+        <p class="login-copy">
+          Sign in with the allowlisted Supabase account. This page is not linked from
+          the public portfolio.
+        </p>
+
+        <div class="setup-notice" id="setup-notice" hidden>
+          Supabase is not configured. Complete <code>supabase-config.js</code> and follow
+          <code>ADMIN_GUIDE.md</code>.
+        </div>
+
+        <form id="login-form" class="admin-form">
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" autocomplete="email" required>
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" name="password" autocomplete="current-password" required>
+          </label>
+          <button class="admin-button admin-button-primary" type="submit">
+            Sign in
+          </button>
+        </form>
+        <p class="form-message" id="login-message" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="dashboard" id="dashboard" hidden>
+      <aside class="admin-sidebar">
+        <div>
+          <p class="admin-kicker">portfolio.control</p>
+          <h1>Admin</h1>
+        </div>
+        <nav class="admin-nav" aria-label="Admin sections">
+          <button class="admin-nav-link active" data-panel="analytics">Analytics</button>
+          <button class="admin-nav-link" data-panel="profile">Profile</button>
+          <button class="admin-nav-link" data-panel="links">Links</button>
+          <button class="admin-nav-link" data-panel="currently-building">Currently Building</button>
+          <button class="admin-nav-link" data-panel="projects">Projects</button>
+          <button class="admin-nav-link" data-panel="achievements">Achievements</button>
+          <button class="admin-nav-link" data-panel="skills">Skills</button>
+          <button class="admin-nav-link" data-panel="certifications">Certifications</button>
+          <button class="admin-nav-link" data-panel="quote">Quote Library</button>
+          <button class="admin-nav-link" data-panel="gallery">Gallery</button>
+        </nav>
+        <div class="sidebar-actions">
+          <a class="admin-button" href="index.html" target="_blank" rel="noopener noreferrer">
+            Preview portfolio
+          </a>
+          <button class="admin-button admin-button-danger" id="logout-button" type="button">
+            Log out
+          </button>
+        </div>
+      </aside>
+
+      <div class="admin-workspace">
+        <header class="admin-topbar">
+          <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-expanded="false">
+            Menu
+          </button>
+          <div>
+            <p id="session-email"></p>
+            <span id="sync-status">Ready</span>
+          </div>
+        </header>
+
+        <section class="admin-panel active" data-admin-panel="analytics">
+          <div class="panel-heading">
+            <div>
+              <p class="admin-kicker">anonymous.metrics</p>
+              <h2>Visitor analytics</h2>
+            </div>
+            <button class="admin-button" id="refresh-analytics" type="button">Refresh</button>
+          </div>
+          <div class="analytics-grid" id="analytics-cards"></div>
+          <div class="analytics-detail-grid">
+            <article class="admin-card">
+              <h3>Device breakdown</h3>
+              <div id="device-breakdown"></div>
+            </article>
+            <article class="admin-card">
+              <h3>Recent visits</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Event</th>
+                      <th>Path</th>
+                      <th>Device</th>
+                      <th>Referrer</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recent-visits"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+          <p class="privacy-note">
+            Anonymous estimates only. No names, emails, raw IP addresses, exact locations,
+            or user-agent strings are stored.
+          </p>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="profile">
+          <div class="panel-heading">
+            <div>
+              <p class="admin-kicker">identity.settings</p>
+              <h2>Profile editor</h2>
+            </div>
+          </div>
+          <form class="admin-form admin-card" id="profile-form">
+            <div class="form-grid">
+              <label><span>Name</span><input name="name" required></label>
+              <label><span>Location</span><input name="location"></label>
+              <label class="full"><span>Headline</span><textarea name="headline" rows="2"></textarea></label>
+              <label class="full"><span>Bio</span><textarea name="bio" rows="4"></textarea></label>
+              <label><span>CGPA</span><input name="cgpa"></label>
+              <label><span>Graduation year</span><input name="graduation_year" inputmode="numeric"></label>
+              <label class="full"><span>Profile photo URL</span><input name="profile_photo" type="url"></label>
+              <label class="upload-field full">
+                <span>Upload profile photo</span>
+                <input name="profile_photo_file" type="file" accept="image/jpeg,image/png,image/webp">
+              </label>
+              <label class="full"><span>Resume URL/path</span><input name="resume"></label>
+              <label class="upload-field full">
+                <span>Upload resume PDF</span>
+                <input name="resume_file" type="file" accept="application/pdf">
+              </label>
+            </div>
+            <button class="admin-button admin-button-primary" type="submit">Save profile</button>
+          </form>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="links">
+          <div class="panel-heading">
+            <div>
+              <p class="admin-kicker">routes.external</p>
+              <h2>Links editor</h2>
+            </div>
+          </div>
+          <form class="admin-form admin-card" id="links-form">
+            <div class="form-grid">
+              <label><span>Email</span><input name="email" type="email"></label>
+              <label><span>Portfolio URL</span><input name="portfolio_url" type="url"></label>
+              <label><span>GitHub</span><input name="github" type="url"></label>
+              <label><span>LinkedIn</span><input name="linkedin" type="url"></label>
+              <label><span>LeetCode URL</span><input name="leetcode" type="url"></label>
+              <label><span>LeetCode username</span><input name="leetcode_username"></label>
+              <label><span>Codeforces URL</span><input name="codeforces" type="url"></label>
+              <label><span>Codeforces username</span><input name="codeforces_username"></label>
+              <label><span>CodeChef URL</span><input name="codechef" type="url"></label>
+              <label><span>CodeChef username</span><input name="codechef_username"></label>
+              <label><span>HackerRank URL</span><input name="hackerrank" type="url"></label>
+              <label><span>HackerRank username</span><input name="hackerrank_username"></label>
+            </div>
+            <button class="admin-button admin-button-primary" type="submit">Save links</button>
+          </form>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="currently-building">
+          <div class="collection-mount" data-collection="currently_building"></div>
+        </section>
+        <section class="admin-panel" data-admin-panel="projects">
+          <div class="collection-mount" data-collection="projects"></div>
+        </section>
+        <section class="admin-panel" data-admin-panel="achievements">
+          <div class="collection-mount" data-collection="achievements"></div>
+        </section>
+        <section class="admin-panel" data-admin-panel="skills">
+          <div class="collection-mount" data-collection="skills"></div>
+        </section>
+        <section class="admin-panel" data-admin-panel="certifications">
+          <div class="collection-mount" data-collection="certifications"></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="quote">
+          <div class="collection-mount" data-collection="quotes"></div>
+        </section>
+
+        <section class="admin-panel" data-admin-panel="gallery">
+          <div class="collection-mount" data-collection="gallery"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="portfolio-data.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="portfolio-service.js?v=2"></script>
+  <script src="admin.js?v=3"></script>
+</body>
+</html>
