@@ -212,6 +212,13 @@ a {
   gap: 20px;
 }
 
+.panel-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .panel-heading h2 {
   margin-top: 8px;
   font-size: clamp(1.8rem, 4vw, 2.6rem);
@@ -239,6 +246,33 @@ a {
 .admin-form {
   display: grid;
   gap: 18px;
+}
+
+.admin-form-section {
+  display: grid;
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 24px;
+}
+
+.admin-form-section:last-of-type {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.admin-form-section-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-form-section-heading h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.admin-form-section-heading p {
+  color: var(--muted);
+  font-size: 0.74rem;
 }
 
 .form-grid {
@@ -604,6 +638,11 @@ th {
   .panel-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .panel-heading-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 

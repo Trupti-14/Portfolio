@@ -78,10 +78,17 @@ on conflict (id) do nothing;
 -- Mark the library as authoritative. With this marker, hiding every quote
 -- hides the public quote section instead of restoring the legacy fallback.
 insert into public.portfolio_meta (id, content)
-values ('main', jsonb_build_object('quote_library_initialized', true))
+select
+  'main',
+  jsonb_build_object(
+    'quote_library_initialized',
+    true,
+    'quote_library_has_entries',
+    exists (select 1 from public.quotes)
+  )
 on conflict (id) do update
 set content = coalesce(public.portfolio_meta.content, '{}'::jsonb)
-  || jsonb_build_object('quote_library_initialized', true);
+  || excluded.content;
 
 -- Repair/confirm gallery policies used by the verified admin delete flow.
 drop policy if exists "Public can read visible gallery" on public.gallery;

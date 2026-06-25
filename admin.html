@@ -12,7 +12,7 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   >
-  <link rel="stylesheet" href="admin.css?v=2">
+  <link rel="stylesheet" href="admin.css?v=4">
 </head>
 <body>
   <main class="admin-root">
@@ -56,7 +56,7 @@
         <nav class="admin-nav" aria-label="Admin sections">
           <button class="admin-nav-link active" data-panel="analytics">Analytics</button>
           <button class="admin-nav-link" data-panel="profile">Profile</button>
-          <button class="admin-nav-link" data-panel="links">Links</button>
+          <button class="admin-nav-link" data-panel="links">Contact</button>
           <button class="admin-nav-link" data-panel="currently-building">Currently Building</button>
           <button class="admin-nav-link" data-panel="projects">Projects</button>
           <button class="admin-nav-link" data-panel="achievements">Achievements</button>
@@ -157,26 +157,58 @@
         <section class="admin-panel" data-admin-panel="links">
           <div class="panel-heading">
             <div>
-              <p class="admin-kicker">routes.external</p>
-              <h2>Links editor</h2>
+              <p class="admin-kicker">recruiter.route</p>
+              <h2>Contact editor</h2>
             </div>
           </div>
-          <form class="admin-form admin-card" id="links-form">
-            <div class="form-grid">
-              <label><span>Email</span><input name="email" type="email"></label>
-              <label><span>Portfolio URL</span><input name="portfolio_url" type="url"></label>
-              <label><span>GitHub</span><input name="github" type="url"></label>
-              <label><span>LinkedIn</span><input name="linkedin" type="url"></label>
-              <label><span>LeetCode URL</span><input name="leetcode" type="url"></label>
-              <label><span>LeetCode username</span><input name="leetcode_username"></label>
-              <label><span>Codeforces URL</span><input name="codeforces" type="url"></label>
-              <label><span>Codeforces username</span><input name="codeforces_username"></label>
-              <label><span>CodeChef URL</span><input name="codechef" type="url"></label>
-              <label><span>CodeChef username</span><input name="codechef_username"></label>
-              <label><span>HackerRank URL</span><input name="hackerrank" type="url"></label>
-              <label><span>HackerRank username</span><input name="hackerrank_username"></label>
-            </div>
-            <button class="admin-button admin-button-primary" type="submit">Save links</button>
+          <form class="admin-form admin-card" id="contact-form">
+            <section class="admin-form-section">
+              <div class="admin-form-section-heading">
+                <h3>Recruiter-facing content</h3>
+                <p>Controls the pitch, availability, and focus chips shown publicly.</p>
+              </div>
+              <div class="form-grid">
+                <label><span>Availability label</span><input name="availability_label" placeholder="RECRUITER.ROUTE"></label>
+                <label><span>Status</span><input name="status"></label>
+                <label class="full"><span>Headline</span><textarea name="contact_headline" rows="2"></textarea></label>
+                <label class="full"><span>Body</span><textarea name="contact_body" rows="4"></textarea></label>
+                <label class="full">
+                  <span>Role / stack chips</span>
+                  <input name="contact_chips" placeholder="SWE Intern, Backend, Java, Spring Boot">
+                  <small>Comma-separated. Keep this focused and recruiter-scannable.</small>
+                </label>
+                <label class="full"><span>Preferred roles</span><input name="preferred_roles" placeholder="Software Engineering, Backend, Full Stack"></label>
+                <label><span>Location</span><input name="contact_location"></label>
+                <label class="toggle-label">
+                  <input name="contact_visible" type="checkbox">
+                  <span>Show contact section</span>
+                </label>
+              </div>
+            </section>
+
+            <section class="admin-form-section">
+              <div class="admin-form-section-heading">
+                <h3>Contact routes</h3>
+                <p>Empty routes are hidden automatically on the public portfolio.</p>
+              </div>
+              <div class="form-grid">
+                <label><span>Email</span><input name="email" type="email"></label>
+                <label><span>Portfolio URL</span><input name="portfolio_url" type="url"></label>
+                <label class="full"><span>Resume URL/path</span><input name="resume"></label>
+                <label><span>GitHub URL</span><input name="github" type="url"></label>
+                <label><span>LinkedIn URL</span><input name="linkedin" type="url"></label>
+                <label><span>LeetCode URL</span><input name="leetcode" type="url"></label>
+                <label><span>LeetCode username</span><input name="leetcode_username"></label>
+                <label><span>Codeforces URL</span><input name="codeforces" type="url"></label>
+                <label><span>Codeforces username</span><input name="codeforces_username"></label>
+                <label><span>CodeChef URL</span><input name="codechef" type="url"></label>
+                <label><span>CodeChef username</span><input name="codechef_username"></label>
+                <label><span>HackerRank URL</span><input name="hackerrank" type="url"></label>
+                <label><span>HackerRank username</span><input name="hackerrank_username"></label>
+              </div>
+            </section>
+
+            <button class="admin-button admin-button-primary" type="submit">Save contact</button>
           </form>
         </section>
 
@@ -210,9 +242,10 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="portfolio-data.js"></script>
+  <script src="default-quotes.js?v=1"></script>
   <script src="supabase-config.js"></script>
   <script src="supabase-client.js"></script>
-  <script src="portfolio-service.js?v=2"></script>
-  <script src="admin.js?v=3"></script>
+  <script src="portfolio-service.js?v=3"></script>
+  <script src="admin.js?v=5"></script>
 </body>
 </html>

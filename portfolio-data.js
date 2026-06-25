@@ -25,10 +25,14 @@ window.PORTFOLIO_DATA = {
 
   links: {
     resume: "resume.pdf",
-    email: "mailto:truptipatil9506@gmail.com",
+    email: "mailto:truptipatil9706@gmail.com",
     github: "https://github.com/Trupti-14",
     linkedin: "https://www.linkedin.com/in/trupti-patil-09ba2332b/",
-    leetcode: ""
+    phone_no: "",
+    leetcode: "",
+    codeforces: "",
+    codechef: "",
+    hackerrank: ""
   },
 
   hero: {
@@ -92,6 +96,7 @@ window.PORTFOLIO_DATA = {
       visible: true,
       order: 1
     },
+    
     {
       id: "vanguard-prototype",
       title: "Vanguard Prototype",
@@ -102,6 +107,7 @@ window.PORTFOLIO_DATA = {
       visible: true,
       order: 2
     },
+
     {
       id: "dsa-preparation",
       title: "DSA Preparation",
@@ -573,45 +579,18 @@ window.PORTFOLIO_DATA = {
   ],
 
   contact: {
-    eyebrow: "Let’s connect",
-    titleBefore: "Looking for an intern who likes",
-    titleEmphasis: "hard problems?",
-    description:
-      "I’m currently seeking Software Engineering, Backend, Full Stack, and AI/ML internship opportunities. If you’re building meaningful products or engineering systems, I’d be glad to connect.",
-    actions: [
-      {
-        label: "Email",
-        value: "truptipatil9506@gmail.com",
-        linkKey: "email",
-        primary: true,
-        visible: true
-      },
-      {
-        label: "Resume",
-        value: "Download PDF",
-        linkKey: "resume",
-        download: true,
-        visible: true
-      },
-      {
-        label: "GitHub",
-        value: "Trupti-14 ↗",
-        linkKey: "github",
-        visible: true
-      },
-      {
-        label: "LinkedIn",
-        value: "Trupti Patil ↗",
-        linkKey: "linkedin",
-        visible: true
-      },
-      {
-        label: "LeetCode",
-        value: "View profile ↗",
-        linkKey: "leetcode",
-        visible: true
-      }
-    ]
+    copyVersion: 3,
+    visible: true,
+    availabilityLabel: "RECRUITER.ROUTE",
+    status: "Available for Software Engineering Internship conversations",
+    headline: "Let’s build secure, scalable and useful systems.",
+    body:
+      "I’m currently seeking Software Engineering, Backend, Full Stack, and AI/ML internship opportunities. I’m especially interested in teams working on scalable products, secure systems, developer tools, applied AI, or real-world engineering platforms.",
+    chips: ["SWE Intern", "Backend", "Full Stack", "AI/ML", "Java", "Spring Boot", "React"],
+    preferredRoles: ["Software Engineering", "Backend", "Full Stack", "AI/ML"],
+    location: "Pune, India",
+    note:
+      "Response-friendly links for referrals, internship conversations and project discussions."
   },
 
   footer: {

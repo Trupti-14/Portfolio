@@ -80,7 +80,7 @@ fallback normally.
 Sign in at `admin.html`. The dashboard supports:
 
 - Profile, headline, bio, CGPA, graduation year, photo, and resume
-- Contact, social, and coding-profile links
+- Recruiter contact copy, role chips, availability, and contact routes
 - Currently-building items
 - Projects and project screenshots
 - Achievements and multiple proof images
@@ -111,6 +111,15 @@ copies the legacy singleton quote when available, and marks the library as
 initialized.
 
 The admin Quote Library can add, edit, hide/show, reorder, and delete quotes.
+It also includes **Seed default quotes**, which inserts the built-in engineering
+quote bank by stable ID. Existing rows are never overwritten and repeated
+seeding does not create duplicates.
+
+The built-in bank contains 20 concise, commonly attributed quotes about
+software design, systems, scientific thinking, learning, and building. It is
+stored in `default-quotes.js` and provides useful daily rotation immediately,
+even when Supabase is unavailable or the `quotes` table has no rows.
+
 The public page sorts visible quotes by `display_order`, converts the visitor's
 current local calendar date to a day number, and selects:
 
@@ -118,11 +127,67 @@ current local calendar date to a day number, and selects:
 dayNumber % visibleQuoteCount
 ```
 
-The result stays stable for the entire day and advances automatically without a
-cron job or redeploy. If the migration has not been run, the legacy
-`portfolio_quote` singleton and then `portfolio-data.js` remain the fallback.
-After the library is initialized, hiding all quotes hides the public quote
-section.
+The result stays stable for the entire local calendar day and advances
+automatically without a cron job or redeploy. Supabase visible quotes take
+priority. An empty or unavailable Supabase quote library uses the local default
+bank. If database quotes exist but every one is hidden, the quote section is
+hidden intentionally.
+
+### Project case studies
+
+Every visible project uses the same premium case-study structure: numbered
+rail, category, title, description, contribution, stack, links, and visual
+area. `featured` can still be used as metadata/emphasis, but non-featured
+projects no longer receive a smaller card.
+
+When no screenshot is available—or an image fails to load—the public renderer
+uses a CSS schematic. ShadowTrace, Vanguard, AyuCare, and SwiftShare have
+project-specific threat-graph, compliance, AI-screening, and settlement-flow
+labels.
+
+### Contact editor
+
+The admin **Contact** panel edits both `portfolio_meta.content.contact` and
+`portfolio_links`. It controls:
+
+- Availability label, status, headline, body, chips, preferred roles, location,
+  and section visibility
+- Email, portfolio, resume, GitHub, LinkedIn, LeetCode, Codeforces, CodeChef,
+  and HackerRank routes
+- Coding-profile usernames
+
+The save updates only the contact metadata, links singleton, and coding-profile
+rows. It does not republish project, skill, achievement, or gallery collections.
+
+Email display text is derived from the saved `mailto:` link, so changing the
+admin email updates the recruiter-facing address without hardcoded duplicate
+content. The public Email card also includes a Copy button.
+
+All public routes are conditional. Empty links are omitted automatically. A
+missing local resume is checked before rendering so visitors do not receive a
+broken download. Resume links open in a new tab; external profile links use
+`noopener noreferrer`.
+
+Contact validation requires a normal email address and `https://` for external
+URLs. A resume may use either an `https://` URL or a safe relative path such as
+`resume.pdf`.
+
+### Save and upload reliability
+
+Admin authentication, reads, writes, deletes, analytics, and uploads use
+timeouts. A stalled network or blocked RLS operation now returns a readable
+message and resets the affected button.
+
+Upload validation:
+
+- Profile image: JPEG, PNG, or WebP; maximum 5 MB
+- Project, achievement, certificate, and gallery images: JPEG, PNG, or WebP;
+  maximum 8 MB
+- Resume: PDF only; maximum 10 MB
+
+Files are uploaded only when a new file is selected. Saving text does not
+re-upload the existing asset. After a successful save, the changed singleton or
+collection is re-read from Supabase instead of trusting stale local state.
 
 ### Gallery deletion
 
@@ -175,6 +240,7 @@ Cloudflare Pages, or a similar host. Ensure these files are included:
 - `index.html`, `admin.html`
 - Public and admin CSS/JavaScript files
 - `portfolio-data.js`
+- `default-quotes.js`
 - `supabase-config.js`
 - `resume.pdf` and local image assets
 
@@ -194,6 +260,8 @@ Admin content and Storage uploads do not require a site redeploy. Redeploy for:
 - Changes to the local fallback in `portfolio-data.js`
 - A changed Supabase project URL or anon key
 - New static files that are not uploaded through the admin
+- Changes to the built-in quote bank in `default-quotes.js`
+- Project card structure, contact copy, or other public rendering code
 
 ## Troubleshooting
 

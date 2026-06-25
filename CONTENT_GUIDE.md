@@ -48,6 +48,11 @@ The private admin's Quote Library is the normal way to manage rotating quotes.
 For an existing Supabase project, first run
 `supabase/quote-library-migration.sql`.
 
+The site ships with 20 default engineering and scientific-thinking quotes in
+`default-quotes.js`. They rotate locally when Supabase is unavailable or has no
+quote rows. In the admin, use **Seed default quotes** to copy only missing stable
+IDs into Supabase; existing customizations are not overwritten.
+
 `portfolio-data.js` still contains the offline fallback:
 
 ```js
@@ -73,7 +78,70 @@ The public site sorts visible quotes by display order and deterministically
 chooses `dayNumber % visibleQuoteCount`. The selected quote remains unchanged
 for the full local calendar day and advances automatically the next day. With
 one visible quote, that quote is always shown. With no visible quotes after the
-library is initialized, the quote section is hidden.
+library contains managed rows, the quote section is hidden only when all of
+those rows are hidden. Deleting every database quote restores the local default
+bank.
+
+## Project case-study rendering
+
+All projects now use one consistent wide case-study layout. The `featured`
+field remains supported, but it does not reduce non-featured projects to
+smaller cards.
+
+Each project should provide:
+
+- A clear category in `label`
+- A concise engineering-focused `description`
+- A specific `contribution`
+- Focused `tags`
+- GitHub and live URLs only when they exist
+- An optional screenshot and meaningful `imageAlt`
+
+If `image` is empty or fails to load, the site renders a CSS system schematic.
+The four main projects have tailored visual labels:
+
+- ShadowTrace: threat graph
+- Vanguard: compliance pipeline
+- AyuCare: AI screening/model flow
+- SwiftShare: settlement/transaction graph
+
+Changing project content through the admin does not require redeployment.
+Changing the card layout or schematic CSS does.
+
+## Contact visibility
+
+The admin **Contact** panel is the normal editing surface for:
+
+- Availability label and status
+- Headline and recruiter-facing body copy
+- Role/technology chips and preferred roles
+- Location and section visibility
+- Email, portfolio, resume, social, and coding-profile routes
+
+Contact links are URL-driven. Empty email, GitHub, LinkedIn, Resume, LeetCode,
+Codeforces, CodeChef, or HackerRank links are omitted automatically. The
+displayed email is derived from the editable admin email value and includes a
+Copy email action.
+
+The contact object is stored under `portfolio_meta.content.contact`; routes are
+stored in `portfolio_links`, with coding-profile rows retained for backward
+compatibility. Supabase values take priority, while `portfolio-data.js` supplies
+the complete offline fallback.
+
+External URLs must use `https://`. Resume accepts an HTTPS URL or a relative
+path. Updating contact content and links through admin does not require a
+redeploy. Editing the fallback object or contact CSS/JavaScript does.
+
+## Admin upload limits
+
+- Profile: JPG, PNG, or WebP up to 5 MB
+- Project, achievement, certificate, and gallery images: JPG, PNG, or WebP up
+  to 8 MB
+- Resume: PDF up to 10 MB
+
+An existing file is not uploaded again unless a new file is selected. Network,
+timeout, RLS, and Storage errors are shown in the admin instead of leaving a
+save button indefinitely busy.
 
 ## Add coding-profile links
 

@@ -125,6 +125,19 @@
     return mapQuote(visibleQuotes[index]);
   }
 
+  function defaultQuote(date = new Date()) {
+    return selectDailyQuote(window.DEFAULT_QUOTES || [], date);
+  }
+
+  function applyDefaultQuote(local, date = new Date()) {
+    const selected = defaultQuote(date);
+    if (selected) local.quote = selected;
+    else if (!local.quote?.text) {
+      local.quote = { visible: false, text: "", author: "", context: "" };
+    }
+    return local;
+  }
+
   async function safeSelect(client, table, columns = "*") {
     const { data, error } = await client.from(table).select(columns);
     if (error) throw error;
@@ -146,8 +159,9 @@
 
   async function loadPortfolio(fallback) {
     const local = clone(fallback);
+    const fallbackContact = clone(fallback.contact || {});
     const client = await window.PortfolioSupabase?.ready;
-    if (!client) return local;
+    if (!client) return applyDefaultQuote(local);
 
     try {
       const [
@@ -184,8 +198,16 @@
       const databaseInitialized = meta?.supabase_initialized === true;
       const quoteLibraryInitialized =
         meta?.quote_library_initialized === true;
+      const quoteLibraryHasEntries =
+        meta?.quote_library_has_entries === true;
       if (meta && typeof meta === "object") {
         Object.assign(local, meta);
+      }
+      if (
+        fallbackContact.copyVersion &&
+        local.contact?.copyVersion !== fallbackContact.copyVersion
+      ) {
+        local.contact = fallbackContact;
       }
 
       const links = linksResult.data?.content;
@@ -194,12 +216,17 @@
       }
 
       const dailyQuote = selectDailyQuote(quoteLibraryResult.rows);
-      if (
+      if (quoteLibraryResult.available && dailyQuote) {
+        local.quote = dailyQuote;
+      } else if (quoteLibraryResult.available && quoteLibraryHasEntries) {
+        local.quote = { visible: false, text: "", author: "", context: "" };
+      } else if (
         quoteLibraryResult.available &&
-        (quoteLibraryInitialized || quoteLibraryResult.rows.length)
+        (quoteLibraryInitialized || !quoteLibraryResult.rows.length)
       ) {
-        local.quote =
-          dailyQuote || { visible: false, text: "", author: "", context: "" };
+        applyDefaultQuote(local);
+      } else if (defaultQuote()) {
+        applyDefaultQuote(local);
       } else if (quoteResult.data) {
         local.quote = {
           visible: quoteResult.data.visible,
@@ -226,7 +253,7 @@
     } catch (error) {
       console.warn("Supabase content unavailable; using local portfolio fallback.");
       local.__source = "local";
-      return local;
+      return applyDefaultQuote(local);
     }
   }
 
@@ -234,6 +261,7 @@
     loadPortfolio,
     clone,
     selectDailyQuote,
-    localDayNumber
+    localDayNumber,
+    defaultQuote
   };
 })();

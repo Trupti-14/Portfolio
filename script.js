@@ -23,13 +23,18 @@ function isExternalLink(href = "") {
 
 function resolveLink(item) {
   if (!item) return "";
-  return item.href || data.links?.[item.linkKey] || "";
+  return (
+    item.href ||
+    data.links?.[item.linkKey] ||
+    data.codingProfiles?.find((profile) => profile.id === item.linkKey)?.url ||
+    ""
+  );
 }
 
 function configureLink(link, href, options = {}) {
   link.href = href;
   if (options.download) link.setAttribute("download", "");
-  if (isExternalLink(href)) {
+  if (options.newTab || isExternalLink(href)) {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
   }
@@ -338,6 +343,35 @@ function createOptionalMedia(config, className, onEmpty) {
   return wrapper;
 }
 
+function createProjectSchematic(project) {
+  const schematicLabels = {
+    shadowtrace: "threat_graph.map",
+    vanguard: "compliance.pipeline",
+    ayucare: "ai_screening.model_flow",
+    swiftshare: "settlement.transaction_graph"
+  };
+  const schematic = element(
+    "div",
+    `project-schematic project-schematic-${project.id}`
+  );
+  schematic.setAttribute("aria-hidden", "true");
+  schematic.append(
+    element(
+      "span",
+      "schematic-label",
+      schematicLabels[project.id] || "system.architecture"
+    ),
+    element("i", "schematic-node schematic-node-a"),
+    element("i", "schematic-node schematic-node-b"),
+    element("i", "schematic-node schematic-node-c"),
+    element("i", "schematic-node schematic-node-d"),
+    element("i", "schematic-link schematic-link-a"),
+    element("i", "schematic-link schematic-link-b"),
+    element("i", "schematic-link schematic-link-c")
+  );
+  return schematic;
+}
+
 function renderProjects() {
   const mount = byId("projects-grid");
   const projects = visibleByOrder(data.projects);
@@ -345,7 +379,7 @@ function renderProjects() {
   projects.forEach((project, index) => {
     const card = element(
       "article",
-      `project-card${project.featured ? " project-featured" : ""}`
+      `project-card project-case-study${project.featured ? " project-featured" : ""}`
     );
     card.dataset.projectId = project.id;
 
@@ -353,7 +387,7 @@ function renderProjects() {
     rail.append(
       element("span", "project-index", String(index + 1).padStart(2, "0")),
       element("span", "project-rail-line"),
-      element("span", "project-rail-type", project.featured ? "case study" : "build")
+      element("span", "project-rail-type", "case study")
     );
 
     const body = element("div", "project-body");
@@ -406,22 +440,16 @@ function renderProjects() {
         fit: "cover",
         className: "project-image"
       },
-      "project-media"
+      "project-media",
+      () => {
+        if (!card.querySelector(".project-schematic")) {
+          card.append(createProjectSchematic(project));
+        }
+      }
     );
     let visual = media;
-    if (!visual && project.featured) {
-      visual = element("div", `project-schematic project-schematic-${project.id}`);
-      visual.setAttribute("aria-hidden", "true");
-      visual.append(
-        element("span", "schematic-label", project.id === "shadowtrace" ? "threat_graph.map" : "compliance.pipeline"),
-        element("i", "schematic-node schematic-node-a"),
-        element("i", "schematic-node schematic-node-b"),
-        element("i", "schematic-node schematic-node-c"),
-        element("i", "schematic-node schematic-node-d"),
-        element("i", "schematic-link schematic-link-a"),
-        element("i", "schematic-link schematic-link-b"),
-        element("i", "schematic-link schematic-link-c")
-      );
+    if (!visual) {
+      visual = createProjectSchematic(project);
     }
 
     card.append(rail, body);
@@ -434,26 +462,53 @@ function renderProjects() {
 
 function renderSkills() {
   const mount = byId("skills-grid");
+  const overview = byId("skills-overview");
   const groups = visibleByOrder(data.skills);
+
+  if (!groups.length) {
+    byId("skills").hidden = true;
+    return;
+  }
+
+  const skillCount = groups.reduce(
+    (total, group) => total + group.items.filter(Boolean).length,
+    0
+  );
+  const overviewCopy = element("div", "skills-overview-copy");
+  overviewCopy.append(
+    element("span", "skills-overview-code", "toolchain.summary"),
+    element("strong", "", "Backend-first engineering toolkit")
+  );
+  const overviewStats = element("div", "skills-overview-stats");
+  [
+    `${String(groups.length).padStart(2, "0")} modules`,
+    `${String(skillCount).padStart(2, "0")} capabilities`,
+    "SDE-aligned"
+  ].forEach((item) => overviewStats.append(element("span", "", item)));
+  overview.append(overviewCopy, overviewStats);
 
   groups.forEach((group) => {
     const card = element(
       "article",
       `skill-group${group.wide ? " skill-group-wide" : ""}`
     );
+    card.dataset.skillId = group.id || "";
     const list = element("ul", "skill-list");
     group.items.filter(Boolean).forEach((item) => list.append(element("li", "", item)));
     card.dataset.skillIndex = String(group.order).padStart(2, "0");
+
     const heading = element("div", "skill-heading");
-    heading.append(
-      element("span", "skill-index", String(group.order).padStart(2, "0")),
+    const title = element("div", "skill-title");
+    title.append(
+      element("span", "skill-index", `${String(group.order).padStart(2, "0")} /`),
       element("h3", "", group.title)
     );
+    const status = element("span", "skill-module-status", "loaded");
+    status.prepend(element("i"));
+    heading.append(title, status);
     card.append(heading, list);
     mount.append(card);
   });
-
-  if (!groups.length) byId("skills").hidden = true;
 }
 
 function renderCodingProfiles() {
@@ -742,42 +797,160 @@ function renderGallery() {
 }
 
 function renderContact() {
+  const section = byId("contact");
   const mount = byId("contact-card");
+  const contact = data.contact || {};
+  if (contact.visible === false) {
+    section.hidden = true;
+    return;
+  }
+
+  const headline =
+    contact.headline ||
+    [contact.titleBefore, contact.titleEmphasis].filter(Boolean).join(" ");
+  const body = contact.body || contact.description || "";
+  const chips = (
+    contact.chips?.length ? contact.chips : contact.preferredRoles || []
+  ).filter(Boolean);
+
   const copy = element("div", "contact-copy");
+  copy.append(element(
+    "p",
+    "eyebrow",
+    contact.availabilityLabel || contact.eyebrow || "RECRUITER.ROUTE"
+  ));
+
+  const status = element("p", "contact-status");
+  status.append(
+    element("i"),
+    document.createTextNode(
+      contact.status || "Available for Software Engineering Internship conversations"
+    )
+  );
+  copy.append(status);
+
   copy.append(
-    element("p", "eyebrow", "recruiter.route"),
-    element("p", "contact-status", "Status: available for internship conversations")
+    element("h2", "", headline),
+    element("p", "contact-description", body)
   );
 
-  const title = element("h2");
-  appendText(title, `${data.contact.titleBefore} `);
-  title.append(element("span", "", data.contact.titleEmphasis));
-  copy.append(title, element("p", "", data.contact.description));
+  if (chips.length) {
+    const chipList = element("ul", "contact-chips");
+    chipList.setAttribute("aria-label", "Internship and technical focus");
+    chips.forEach((chip) => chipList.append(element("li", "", chip)));
+    copy.append(chipList);
+  }
+
+  const routeDefinitions = [
+    { key: "email", label: "Email", code: "mailto", primary: true },
+    { key: "resume", label: "Resume", code: "pdf", newTab: true },
+    { key: "github", label: "GitHub", code: "git" },
+    { key: "linkedin", label: "LinkedIn", code: "in" },
+    { key: "leetcode", label: "LeetCode", code: "lc" },
+    { key: "codeforces", label: "Codeforces", code: "cf" },
+    { key: "codechef", label: "CodeChef", code: "cc" },
+    { key: "hackerrank", label: "HackerRank", code: "hr" }
+  ];
 
   const actions = element("div", "contact-actions");
-  data.contact.actions
-    .filter((action) => action.visible !== false && resolveLink(action))
-    .forEach((action) => {
-      const href = resolveLink(action);
-      const link = configureLink(
-        element(
-          "a",
-          `contact-link${action.primary ? " contact-link-primary" : ""}`
-        ),
-        href,
-        {
-          download: action.download,
-          ariaLabel: `${action.label} for ${data.profile.name}`
-        }
-      );
-      link.append(
-        element("span", "", action.label),
-        element("strong", "", action.value)
-      );
-      actions.append(link);
-    });
+  routeDefinitions.forEach((route) => {
+    const href = resolveLink({ linkKey: route.key });
+    if (!href) return;
 
-  mount.append(copy, actions);
+    const card = element(
+      "article",
+      `contact-action-card${route.primary ? " contact-action-primary" : ""}`
+    );
+    const link = configureLink(
+      element("a", "contact-action-link"),
+      href,
+      {
+        newTab: route.newTab,
+        ariaLabel: `${route.label} for ${data.profile.name}`
+      }
+    );
+    const routeTop = element("span", "contact-action-top");
+    routeTop.append(
+      element("span", "contact-action-code", route.code),
+      element("span", "contact-action-arrow", route.key === "email" ? "→" : "↗")
+    );
+
+    let value = "Open profile";
+    if (route.key === "email") {
+      value = href.replace(/^mailto:/i, "").split("?")[0];
+    } else if (route.key === "resume") {
+      value = "Open resume";
+    } else {
+      const username =
+        data.links?.[`${route.key}Username`] ||
+        data.codingProfiles?.find((profile) => profile.id === route.key)
+          ?.username;
+      if (username) value = username;
+    }
+    link.append(
+      routeTop,
+      element("strong", "", route.label),
+      element("small", "", value)
+    );
+    card.append(link);
+
+    if (route.key === "email") {
+      const email = value;
+      const copyButton = element("button", "contact-copy-button", "Copy");
+      copyButton.type = "button";
+      copyButton.setAttribute("aria-label", `Copy email address ${email}`);
+      copyButton.addEventListener("click", async () => {
+        try {
+          let copied = false;
+          if (navigator.clipboard?.writeText) {
+            try {
+              await navigator.clipboard.writeText(email);
+              copied = true;
+            } catch {
+              copied = false;
+            }
+          }
+          if (!copied) {
+            const input = document.createElement("textarea");
+            input.value = email;
+            input.setAttribute("readonly", "");
+            input.style.position = "fixed";
+            input.style.opacity = "0";
+            document.body.append(input);
+            input.select();
+            copied = document.execCommand("copy");
+            input.remove();
+          }
+          if (!copied) throw new Error("Clipboard access denied.");
+          copyButton.textContent = "Copied";
+          window.setTimeout(() => {
+            copyButton.textContent = "Copy";
+          }, 1800);
+        } catch {
+          copyButton.textContent = "Copy failed";
+          window.setTimeout(() => {
+            copyButton.textContent = "Copy";
+          }, 1800);
+        }
+      });
+      card.append(copyButton);
+    }
+    actions.append(card);
+  });
+
+  mount.append(copy);
+  if (actions.childElementCount) mount.append(actions);
+  else mount.classList.add("contact-no-actions");
+
+  if (contact.note) {
+    const note = element("p", "contact-console-note", contact.note);
+    if (contact.location) {
+      note.prepend(
+        element("span", "", `${contact.location} · `)
+      );
+    }
+    mount.append(note);
+  }
 }
 
 function renderFooter() {

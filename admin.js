@@ -7,6 +7,8 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const clone = (value) => JSON.parse(JSON.stringify(value));
+  const REQUEST_TIMEOUT = 15000;
+  const UPLOAD_TIMEOUT = 30000;
 
   const state = {
     client: null,
@@ -19,7 +21,8 @@
     initialized: false,
     initializing: null,
     quoteLibraryAvailable: false,
-    quoteLibraryInitialized: false
+    quoteLibraryInitialized: false,
+    quoteLibraryHasEntries: false
   };
 
   const configs = {
@@ -190,6 +193,31 @@
     return { name, label, type, ...options };
   }
 
+  function withTimeout(operation, label, timeout = REQUEST_TIMEOUT) {
+    let timer;
+    const task = typeof operation === "function" ? operation() : operation;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = window.setTimeout(() => {
+        reject(
+          new Error(
+            `${label} timed out. Check your network connection and Supabase RLS or Storage policies.`
+          )
+        );
+      }, timeout);
+    });
+    return Promise.race([Promise.resolve(task), timeoutPromise]).finally(() => {
+      window.clearTimeout(timer);
+    });
+  }
+
+  function errorMessage(error, fallback = "The operation failed.") {
+    const message = error?.message || fallback;
+    if (/failed to fetch|networkerror|load failed/i.test(message)) {
+      return `${fallback} Check your network connection and Supabase project availability.`;
+    }
+    return message;
+  }
+
   function slugify(value) {
     return String(value || "")
       .toLowerCase()
@@ -303,16 +331,7 @@
         visible: row.visible !== false,
         display_order: row.order ?? index + 1
       })),
-      quotes: localData.quote?.text
-        ? [{
-            id: "legacy-build-principle",
-            quote_text: localData.quote.text,
-            author: localData.quote.author || "",
-            context: localData.quote.context || "",
-            visible: localData.quote.visible !== false,
-            display_order: 1
-          }]
-        : [],
+      quotes: clone(window.DEFAULT_QUOTES || []),
       gallery: (localData.gallery || []).map((row, index) => ({
         id: row.id,
         title: row.title,
@@ -341,7 +360,7 @@
     $("#login-form").addEventListener("submit", signIn);
     $("#logout-button").addEventListener("click", signOut);
     $("#profile-form").addEventListener("submit", saveProfile);
-    $("#links-form").addEventListener("submit", saveLinks);
+    $("#contact-form").addEventListener("submit", saveContact);
     $("#refresh-analytics").addEventListener("click", loadAnalytics);
 
     $$(".admin-nav-link").forEach((button) => {
@@ -357,7 +376,10 @@
 
   async function initialize() {
     wireInterface();
-    state.client = await window.PortfolioSupabase?.ready;
+    state.client = await withTimeout(
+      window.PortfolioSupabase?.ready,
+      "Connecting to Supabase"
+    );
     if (!state.client) {
       $("#setup-notice").hidden = false;
       $("#login-message").textContent =
@@ -370,7 +392,10 @@
       if (!session && !$("#dashboard").hidden) showLogin();
     });
 
-    const { data, error } = await state.client.auth.getSession();
+    const { data, error } = await withTimeout(
+      state.client.auth.getSession(),
+      "Checking the admin session"
+    );
     if (error) $("#login-message").textContent = error.message;
     if (data?.session?.user) await openDashboard(data.session.user);
   }
@@ -381,21 +406,32 @@
     const button = event.submitter;
     $("#login-message").textContent = "";
     setButtonLoading(button, true, "Signing in…");
-    const { data, error } = await state.client.auth.signInWithPassword({
-      email: form.elements.email.value.trim(),
-      password: form.elements.password.value
-    });
-    setButtonLoading(button, false);
-    if (error) {
-      $("#login-message").textContent = error.message;
-      return;
+    try {
+      const { data, error } = await withTimeout(
+        state.client.auth.signInWithPassword({
+          email: form.elements.email.value.trim(),
+          password: form.elements.password.value
+        }),
+        "Signing in"
+      );
+      if (error) {
+        $("#login-message").textContent = error.message;
+        return;
+      }
+      await openDashboard(data.user);
+    } catch (error) {
+      $("#login-message").textContent = errorMessage(error, "Sign-in failed.");
+    } finally {
+      setButtonLoading(button, false);
     }
-    await openDashboard(data.user);
   }
 
   async function signOut() {
-    await state.client.auth.signOut();
-    showLogin();
+    try {
+      await withTimeout(state.client.auth.signOut(), "Signing out");
+    } finally {
+      showLogin();
+    }
   }
 
   function showLogin() {
@@ -406,7 +442,10 @@
 
   async function openDashboard(user) {
     $("#login-message").textContent = "";
-    const { data: allowed, error } = await state.client.rpc("is_portfolio_admin");
+    const { data: allowed, error } = await withTimeout(
+      state.client.rpc("is_portfolio_admin"),
+      "Checking the admin allowlist"
+    );
     if (error || !allowed) {
       await state.client.auth.signOut();
       showLogin();
@@ -435,13 +474,19 @@
   }
 
   async function selectAll(table) {
-    const { data, error } = await state.client.from(table).select("*");
+    const { data, error } = await withTimeout(
+      state.client.from(table).select("*"),
+      `Loading ${table}`
+    );
     if (error) throw new Error(`${table}: ${error.message}`);
     return data || [];
   }
 
   async function selectOptionalTable(table) {
-    const { data, error } = await state.client.from(table).select("*");
+    const { data, error } = await withTimeout(
+      state.client.from(table).select("*"),
+      `Loading ${table}`
+    );
     if (!error) return { available: true, rows: data || [] };
 
     const missingTable =
@@ -451,12 +496,21 @@
     throw new Error(`${table}: ${error.message}`);
   }
 
+  async function selectSingleton(table, columns = "*") {
+    const result = await withTimeout(
+      state.client.from(table).select(columns).eq("id", "main").maybeSingle(),
+      `Loading ${table}`
+    );
+    if (result.error) throw new Error(`${table}: ${result.error.message}`);
+    return result.data;
+  }
+
   async function loadContent() {
     const fallbacks = fallbackCollections();
     const [
-      meta,
-      links,
-      quote,
+      metaRow,
+      linksRow,
+      quoteRow,
       building,
       projects,
       achievements,
@@ -466,9 +520,9 @@
       gallery,
       profiles
     ] = await Promise.all([
-      state.client.from("portfolio_meta").select("content").eq("id", "main").maybeSingle(),
-      state.client.from("portfolio_links").select("content").eq("id", "main").maybeSingle(),
-      state.client.from("portfolio_quote").select("*").eq("id", "main").maybeSingle(),
+      selectSingleton("portfolio_meta", "content"),
+      selectSingleton("portfolio_links", "content"),
+      selectSingleton("portfolio_quote"),
       selectAll("currently_building"),
       selectAll("projects"),
       selectAll("achievements"),
@@ -479,18 +533,20 @@
       selectAll("coding_profiles")
     ]);
 
-    if (meta.error) throw new Error(`portfolio_meta: ${meta.error.message}`);
-    if (links.error) throw new Error(`portfolio_links: ${links.error.message}`);
-    if (quote.error) throw new Error(`portfolio_quote: ${quote.error.message}`);
-
-    state.initialized = meta.data?.content?.supabase_initialized === true;
-    state.meta = clone(meta.data?.content || fallbackMeta());
+    state.initialized = metaRow?.content?.supabase_initialized === true;
+    state.meta = clone(metaRow?.content || fallbackMeta());
+    if (state.meta.contact?.copyVersion !== localData.contact?.copyVersion) {
+      state.meta.contact = clone(localData.contact || {});
+    }
     state.quoteLibraryAvailable = quoteLibrary.available;
     state.quoteLibraryInitialized =
       state.meta.quote_library_initialized === true;
-    state.links = clone(links.data?.content || localData.links || {});
+    state.quoteLibraryHasEntries =
+      state.meta.quote_library_has_entries === true ||
+      quoteLibrary.rows.length > 0;
+    state.links = clone(linksRow?.content || localData.links || {});
     state.quote = clone(
-      quote.data || {
+      quoteRow || {
         id: "main",
         quote_text: localData.quote?.text || "",
         author: localData.quote?.author || "",
@@ -531,25 +587,37 @@
       cgpa,
       graduation_year: period,
       profile_photo: profile.photo,
-      resume: state.links.resume || "resume.pdf"
+      resume: state.links.resume || ""
     });
 
-    const linksForm = $("#links-form");
+    const contactForm = $("#contact-form");
+    const contact = state.meta.contact || localData.contact || {};
     const profileMap = Object.fromEntries(
       state.collections.coding_profiles.map((item) => [item.id, item])
     );
-    const linkValues = {
+    const contactValues = {
+      availability_label: contact.availabilityLabel || contact.eyebrow || "",
+      status: contact.status || "",
+      contact_headline:
+        contact.headline ||
+        [contact.titleBefore, contact.titleEmphasis].filter(Boolean).join(" "),
+      contact_body: contact.body || contact.description || "",
+      contact_chips: (contact.chips || []).join(", "),
+      preferred_roles: (contact.preferredRoles || []).join(", "),
+      contact_location: contact.location || state.meta.profile?.location || "",
+      contact_visible: contact.visible !== false,
       email: String(state.links.email || "").replace(/^mailto:/, ""),
       portfolio_url: state.links.portfolio_url || state.links.portfolio || "",
+      resume: state.links.resume || "",
       github: state.links.github || "",
       linkedin: state.links.linkedin || ""
     };
     ["leetcode", "codeforces", "codechef", "hackerrank"].forEach((id) => {
-      linkValues[id] = profileMap[id]?.url || state.links[id] || "";
-      linkValues[`${id}_username`] =
+      contactValues[id] = profileMap[id]?.url || state.links[id] || "";
+      contactValues[`${id}_username`] =
         profileMap[id]?.username || state.links[`${id}Username`] || "";
     });
-    setFormValues(linksForm, linkValues);
+    setFormValues(contactForm, contactValues);
 
   }
 
@@ -570,7 +638,7 @@
     setSync("Saving profile…");
     try {
       let photo = form.elements.profile_photo.value.trim();
-      let resume = form.elements.resume.value.trim() || "resume.pdf";
+      let resume = form.elements.resume.value.trim();
       const photoFile = form.elements.profile_photo_file.files[0];
       const resumeFile = form.elements.resume_file.files[0];
       if (photoFile) photo = await upload("profile", photoFile, "image");
@@ -599,14 +667,19 @@
         upsert("portfolio_meta", { id: "main", content: state.meta }),
         upsert("portfolio_links", { id: "main", content: state.links })
       ]);
-      form.elements.profile_photo.value = photo;
-      form.elements.resume.value = resume;
+      const [savedMeta, savedLinks] = await Promise.all([
+        selectSingleton("portfolio_meta", "content"),
+        selectSingleton("portfolio_links", "content")
+      ]);
+      state.meta = clone(savedMeta?.content || state.meta);
+      state.links = clone(savedLinks?.content || state.links);
+      populateFixedForms();
       form.elements.profile_photo_file.value = "";
       form.elements.resume_file.value = "";
       toast("Profile saved.");
       setSync("Profile saved");
     } catch (saveError) {
-      toast(saveError.message, "error");
+      toast(errorMessage(saveError, "Profile save failed."), "error");
       setSync("Save failed");
     } finally {
       setButtonLoading(button, false);
@@ -633,19 +706,86 @@
     state.meta.education.facts = facts;
   }
 
-  async function saveLinks(event) {
+  function commaList(value) {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function validateEmail(value) {
+    if (!value) return "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      throw new Error("Enter a valid contact email address.");
+    }
+    return value;
+  }
+
+  function validateHttpsUrl(value, label, options = {}) {
+    if (!value) return "";
+    if (options.allowRelative && !/^[a-z][a-z\d+.-]*:/i.test(value) && !value.startsWith("//")) {
+      return value;
+    }
+    if (!value.startsWith("https://")) {
+      throw new Error(`${label} must start with https://`);
+    }
+    try {
+      return new URL(value).href;
+    } catch {
+      throw new Error(`${label} is not a valid URL.`);
+    }
+  }
+
+  async function saveContact(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const button = event.submitter;
     setButtonLoading(button, true, "Saving…");
+    setSync("Saving contact…");
     try {
-      const email = form.elements.email.value.trim();
+      const email = validateEmail(form.elements.email.value.trim());
+      const portfolio = validateHttpsUrl(
+        form.elements.portfolio_url.value.trim(),
+        "Portfolio URL"
+      );
+      const resume = validateHttpsUrl(
+        form.elements.resume.value.trim(),
+        "Resume URL",
+        { allowRelative: true }
+      );
+      const github = validateHttpsUrl(
+        form.elements.github.value.trim(),
+        "GitHub URL"
+      );
+      const linkedin = validateHttpsUrl(
+        form.elements.linkedin.value.trim(),
+        "LinkedIn URL"
+      );
+
+      state.meta.contact = {
+        ...(state.meta.contact || {}),
+        copyVersion: 3,
+        availabilityLabel: form.elements.availability_label.value.trim(),
+        status: form.elements.status.value.trim(),
+        headline: form.elements.contact_headline.value.trim(),
+        body: form.elements.contact_body.value.trim(),
+        chips: commaList(form.elements.contact_chips.value),
+        preferredRoles: commaList(form.elements.preferred_roles.value),
+        location: form.elements.contact_location.value.trim(),
+        visible: form.elements.contact_visible.checked,
+        note:
+          state.meta.contact?.note ||
+          localData.contact?.note ||
+          ""
+      };
       state.links = {
         ...state.links,
         email: email ? `mailto:${email}` : "",
-        portfolio_url: form.elements.portfolio_url.value.trim(),
-        github: form.elements.github.value.trim(),
-        linkedin: form.elements.linkedin.value.trim()
+        portfolio,
+        portfolio_url: portfolio,
+        resume,
+        github,
+        linkedin
       };
 
       const platforms = {
@@ -655,7 +795,10 @@
         hackerrank: "HackerRank"
       };
       const rows = Object.entries(platforms).map(([id, platform], index) => {
-        const url = form.elements[id].value.trim();
+        const url = validateHttpsUrl(
+          form.elements[id].value.trim(),
+          `${platform} URL`
+        );
         const username = form.elements[`${id}_username`].value.trim();
         state.links[id] = url;
         state.links[`${id}Username`] = username;
@@ -669,28 +812,53 @@
         };
       });
 
-      await ensureInitialized();
       await Promise.all([
+        upsert("portfolio_meta", { id: "main", content: state.meta }),
         upsert("portfolio_links", { id: "main", content: state.links }),
         upsertMany("coding_profiles", rows)
       ]);
-      state.collections.coding_profiles = rows;
-      toast("Links and coding profiles saved.");
+      const [savedMeta, savedLinks, savedProfiles] = await Promise.all([
+        selectSingleton("portfolio_meta", "content"),
+        selectSingleton("portfolio_links", "content"),
+        selectAll("coding_profiles")
+      ]);
+      state.meta = clone(savedMeta?.content || state.meta);
+      state.links = clone(savedLinks?.content || state.links);
+      state.collections.coding_profiles = savedProfiles;
+      populateFixedForms();
+      toast("Contact content and routes saved.");
+      setSync("Contact saved");
     } catch (saveError) {
-      toast(saveError.message, "error");
+      toast(errorMessage(saveError, "Contact save failed."), "error");
+      setSync("Save failed");
     } finally {
       setButtonLoading(button, false);
     }
   }
 
   async function upsert(table, row) {
-    const { error } = await state.client.from(table).upsert(row, { onConflict: "id" });
+    const { error } = await withTimeout(
+      state.client.from(table).upsert(row, { onConflict: "id" }),
+      `Saving ${table}`
+    );
     if (error) throw new Error(error.message);
   }
 
   async function upsertMany(table, rows) {
     if (!rows.length) return;
-    const { error } = await state.client.from(table).upsert(rows, { onConflict: "id" });
+    const { error } = await withTimeout(
+      state.client.from(table).upsert(rows, { onConflict: "id" }),
+      `Saving ${table}`
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  async function insertMany(table, rows) {
+    if (!rows.length) return;
+    const { error } = await withTimeout(
+      state.client.from(table).insert(rows),
+      `Inserting ${table}`
+    );
     if (error) throw new Error(error.message);
   }
 
@@ -732,13 +900,13 @@
     if (state.quoteLibraryInitialized) return;
 
     await ensureInitialized();
-    if (state.quoteLibraryInitialized) return;
-
+    const databaseQuotes = await selectAll("quotes");
     state.meta.quote_library_initialized = true;
+    state.meta.quote_library_has_entries = databaseQuotes.length > 0;
     try {
-      await upsertMany("quotes", state.collections.quotes || []);
       await upsert("portfolio_meta", { id: "main", content: state.meta });
       state.quoteLibraryInitialized = true;
+      state.quoteLibraryHasEntries = databaseQuotes.length > 0;
     } catch (error) {
       state.meta.quote_library_initialized = false;
       throw new Error(`Quote Library initialization failed: ${error.message}`);
@@ -750,6 +918,49 @@
       await ensureQuoteLibraryInitialized();
     } else {
       await ensureInitialized();
+    }
+  }
+
+  async function updateQuoteLibraryMarker(hasEntries) {
+    state.meta.quote_library_initialized = true;
+    state.meta.quote_library_has_entries = hasEntries;
+    await upsert("portfolio_meta", { id: "main", content: state.meta });
+    state.quoteLibraryInitialized = true;
+    state.quoteLibraryHasEntries = hasEntries;
+  }
+
+  async function refreshCollection(table) {
+    const rows = await selectAll(table);
+    state.collections[table] = rows;
+    if (table === "quotes") {
+      await updateQuoteLibraryMarker(rows.length > 0);
+    }
+    renderCollection(table, configs[table]);
+    return rows;
+  }
+
+  async function seedDefaultQuotes(button) {
+    setButtonLoading(button, true, "Seeding…");
+    try {
+      await prepareTableWrite("quotes");
+      const defaults = clone(window.DEFAULT_QUOTES || []);
+      if (!defaults.length) throw new Error("The local default quote bank is unavailable.");
+
+      const existing = await selectAll("quotes");
+      const existingIds = new Set(existing.map((quote) => quote.id));
+      const missing = defaults.filter((quote) => !existingIds.has(quote.id));
+      await insertMany("quotes", missing);
+      const rows = await refreshCollection("quotes");
+      toast(
+        missing.length
+          ? `${missing.length} default quotes added. ${rows.length} quotes are now available.`
+          : "Default quotes are already seeded; no duplicates were added."
+      );
+    } catch (error) {
+      console.error("[Portfolio admin] Default quote seeding failed.", error);
+      toast(errorMessage(error, "Default quote seeding failed."), "error");
+    } finally {
+      setButtonLoading(button, false);
     }
   }
 
@@ -806,7 +1017,15 @@
     headingText.append(kicker, title, description);
     const add = adminButton("Add item", "admin-button-primary");
     add.addEventListener("click", () => editRow(table, newRow(table, config)));
-    heading.append(headingText, add);
+    const headingActions = document.createElement("div");
+    headingActions.className = "panel-heading-actions";
+    if (table === "quotes") {
+      const seed = adminButton("Seed default quotes");
+      seed.addEventListener("click", () => seedDefaultQuotes(seed));
+      headingActions.append(seed);
+    }
+    headingActions.append(add);
+    heading.append(headingText, headingActions);
 
     const layout = document.createElement("div");
     layout.className = "collection-layout";
@@ -1068,15 +1287,11 @@
 
       await prepareTableWrite(table);
       await upsert(table, row);
-      const rows = state.collections[table];
-      const index = rows.findIndex((item) => item.id === row.id);
-      if (index >= 0) rows[index] = row;
-      else rows.push(row);
       state.editing[table] = row.id;
-      renderCollection(table, config);
+      await refreshCollection(table);
       toast(`${config.label(row)} saved.`);
     } catch (saveError) {
-      toast(saveError.message, "error");
+      toast(errorMessage(saveError, `${config.title} save failed.`), "error");
     } finally {
       setButtonLoading(button, false);
     }
@@ -1087,12 +1302,10 @@
     try {
       await prepareTableWrite(table);
       await upsert(table, next);
-      const index = state.collections[table].findIndex((item) => item.id === row.id);
-      state.collections[table][index] = next;
-      renderCollection(table, configs[table]);
+      await refreshCollection(table);
       toast(`${configs[table].label(next)} is ${next.visible ? "visible" : "hidden"}.`);
     } catch (error) {
-      toast(error.message, "error");
+      toast(errorMessage(error, "Visibility update failed."), "error");
     }
   }
 
@@ -1112,11 +1325,14 @@
     }
 
     try {
-      const { data, error } = await state.client
-        .from(table)
-        .delete()
-        .eq("id", row.id)
-        .select("id");
+      const { data, error } = await withTimeout(
+        state.client
+          .from(table)
+          .delete()
+          .eq("id", row.id)
+          .select("id"),
+        `Deleting ${table}`
+      );
       if (error) throw error;
       if (!(data || []).some((deleted) => deleted.id === row.id)) {
         throw new Error(
@@ -1133,9 +1349,8 @@
       return;
     }
 
-    state.collections[table] = state.collections[table].filter((item) => item.id !== row.id);
     delete state.editing[table];
-    renderCollection(table, config);
+    await refreshCollection(table);
 
     const cleanup = await removeAssets(config, row);
     if (cleanup.error) {
@@ -1155,22 +1370,40 @@
   }
 
   async function upload(bucket, file, expected) {
-    const image = file.type.startsWith("image/");
-    const pdf = file.type === "application/pdf";
-    if (expected === "image" && !image) throw new Error(`${file.name} is not a supported image.`);
-    if (expected === "pdf" && !pdf) throw new Error(`${file.name} must be a PDF.`);
-    const maximum = expected === "pdf" ? 10 * 1024 * 1024 : 8 * 1024 * 1024;
+    const imageTypes = ["image/jpeg", "image/png", "image/webp"];
+    const isImage = imageTypes.includes(file.type);
+    const isPdf = file.type === "application/pdf";
+    if (expected === "image" && !isImage) {
+      throw new Error(`${file.name} must be a JPG, PNG, or WebP image.`);
+    }
+    if (expected === "pdf" && !isPdf) {
+      throw new Error(`${file.name} must be a PDF.`);
+    }
+    const maximum =
+      expected === "pdf"
+        ? 10 * 1024 * 1024
+        : bucket === "profile"
+          ? 5 * 1024 * 1024
+          : 8 * 1024 * 1024;
     if (file.size > maximum) {
       throw new Error(`${file.name} exceeds the ${maximum / 1024 / 1024} MB limit.`);
     }
     const safeName = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
     const path = `${state.user.id}/${Date.now()}-${safeName}`;
-    const { error } = await state.client.storage.from(bucket).upload(path, file, {
-      cacheControl: "3600",
-      contentType: file.type,
-      upsert: false
-    });
-    if (error) throw new Error(`Upload failed: ${error.message}`);
+    const { error } = await withTimeout(
+      state.client.storage.from(bucket).upload(path, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+        upsert: false
+      }),
+      `Uploading ${file.name}`,
+      UPLOAD_TIMEOUT
+    );
+    if (error) {
+      throw new Error(
+        `Upload failed for ${file.name}: ${error.message}. Check the ${bucket} bucket and its RLS policies.`
+      );
+    }
     return state.client.storage.from(bucket).getPublicUrl(path).data.publicUrl;
   }
 
@@ -1191,9 +1424,10 @@
     if (!paths.length) return { paths: [], removed: [], error: null };
 
     try {
-      const { data, error } = await state.client.storage
-        .from(config.bucket)
-        .remove(paths);
+      const { data, error } = await withTimeout(
+        state.client.storage.from(config.bucket).remove(paths),
+        `Removing files from ${config.bucket}`
+      );
       return { paths, removed: data || [], error: error || null };
     } catch (error) {
       return { paths, removed: [], error };
@@ -1228,14 +1462,17 @@
     const button = $("#refresh-analytics");
     setButtonLoading(button, true, "Refreshing…");
     try {
-      const [summaryResult, recentResult] = await Promise.all([
-        state.client.rpc("get_visit_summary"),
-        state.client
-          .from("site_visits")
-          .select("created_at,event_type,page_path,device_type,referrer")
-          .order("created_at", { ascending: false })
-          .limit(20)
-      ]);
+      const [summaryResult, recentResult] = await withTimeout(
+        Promise.all([
+          state.client.rpc("get_visit_summary"),
+          state.client
+            .from("site_visits")
+            .select("created_at,event_type,page_path,device_type,referrer")
+            .order("created_at", { ascending: false })
+            .limit(20)
+        ]),
+        "Loading analytics"
+      );
       if (summaryResult.error) throw new Error(summaryResult.error.message);
       if (recentResult.error) throw new Error(recentResult.error.message);
       renderAnalytics(summaryResult.data || {}, recentResult.data || []);
